@@ -88,6 +88,25 @@ public class MutagenService
         return MutagenAsync(args, ct: ct);
     }
 
+    /// <summary>
+    /// Returns the names of ALL sync sessions known to the mutagen daemon, regardless of
+    /// whether they're in config.json. Used to surface orphan sessions (e.g. left over
+    /// after a sync was renamed/removed only in config).
+    /// </summary>
+    public async Task<List<string>> GetAllSessionNamesAsync(CancellationToken ct = default)
+    {
+        var (output, _) = await SyncListAsync(ct: ct);
+        var names = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(output, @"^Name:\s*(.+)$",
+                     System.Text.RegularExpressions.RegexOptions.Multiline))
+        {
+            var name = m.Groups[1].Value.Trim();
+            if (!string.IsNullOrEmpty(name)) names.Add(name);
+        }
+        return names;
+    }
+
     public Task<(string, int)> SyncPauseAsync(string name, CancellationToken ct = default)
     {
         _log.Log($"Pause sync: {name}");

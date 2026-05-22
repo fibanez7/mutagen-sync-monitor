@@ -17,11 +17,15 @@ namespace MutagenManager.Views;
 public partial class StatusWindow : Window
 {
     private readonly MonitorService _monitor;
+    private readonly MutagenService _mutagen;
+    private readonly System.Collections.Generic.HashSet<string> _configNames;
     private readonly ObservableCollection<SyncStatusRow> _rows = [];
 
-    public StatusWindow(MonitorService monitor, AppConfig config)
+    public StatusWindow(MonitorService monitor, AppConfig config, MutagenService mutagen)
     {
         _monitor = monitor;
+        _mutagen = mutagen;
+        _configNames = [.. config.Syncs.Select(s => s.Name)];
         InitializeComponent();
 
         // Seed one row per configured sync (Unknown state until first poll)
@@ -41,6 +45,55 @@ public partial class StatusWindow : Window
         Closed += (_, _) => _monitor.StatusChanged -= OnStatusChangedExternal;
 
         UpdateTimestamp();
+        _ = DetectOrphansAsync();
+    }
+
+    /// <summary>
+    /// Lists every session in the mutagen daemon and surfaces those NOT in config.json as
+    /// orphan rows (e.g. left running after a sync was renamed/removed only in config).
+    /// </summary>
+    private async System.Threading.Tasks.Task DetectOrphansAsync()
+    {
+        var all = await _mutagen.GetAllSessionNamesAsync();
+        var orphans = all.Where(n => !_configNames.Contains(n)).Distinct().ToList();
+
+        Dispatcher.Invoke(() =>
+        {
+            // Drop orphan rows that no longer apply
+            for (int i = _rows.Count - 1; i >= 0; i--)
+                if (_rows[i].IsOrphan && !orphans.Contains(_rows[i].Name))
+                    _rows.RemoveAt(i);
+
+            // Add newly found orphans
+            foreach (var name in orphans)
+                if (!_rows.Any(r => r.Name == name))
+                {
+                    var row = new SyncStatusRow(name, "(sesión activa sin entrada en config.json)");
+                    row.MarkOrphan();
+                    _rows.Add(row);
+                }
+
+            TerminateOrphansBtn.IsEnabled = _rows.Any(r => r.IsOrphan);
+        });
+    }
+
+    private async void TerminateOrphans_Click(object sender, RoutedEventArgs e)
+    {
+        var orphans = _rows.Where(r => r.IsOrphan).Select(r => r.Name).ToList();
+        if (orphans.Count == 0) return;
+
+        var result = MessageBox.Show(
+            $"Estas sesiones de mutagen están activas pero NO en config.json:\n\n  {string.Join("\n  ", orphans)}\n\n" +
+            "¿Terminarlas ahora? (mutagen sync terminate)",
+            "Sesiones huérfanas", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        TerminateOrphansBtn.IsEnabled = false;
+        foreach (var name in orphans)
+            await _mutagen.SyncTerminateAsync(name);
+
+        await DetectOrphansAsync();
+        _monitor.RequestImmediateCheck();
     }
 
     // Raised on thread-pool; dispatch to UI thread
@@ -73,6 +126,7 @@ public partial class StatusWindow : Window
     {
         _monitor.RequestImmediateCheck();
         LastUpdatedLabel.Text = "Actualizando…";
+        _ = DetectOrphansAsync();
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -90,6 +144,18 @@ public class SyncStatusRow : INotifyPropertyChanged
 
     public string Name      { get; }
     public string LocalPath { get; }
+    public bool   IsOrphan  { get; private set; }
+
+    /// <summary>Marks this row as a daemon session not present in config.json.</summary>
+    public void MarkOrphan()
+    {
+        IsOrphan      = true;
+        DisplayStatus = "⚠ Huérfana (no en config)";
+        StatusBrush   = new WpfSolidBrush(WpfColor.FromRgb(244, 67, 54));
+        DetailText    = "Sesión activa en el daemon de mutagen sin entrada correspondiente en " +
+                        "config.json.\nProbablemente quedó tras renombrar o eliminar un sync solo en el " +
+                        "config.\nUsa 'Terminar huérfanas' para cerrarla, o recréala en Ajustes si la quieres conservar.";
+    }
 
     public string    DisplayStatus { get => _displayStatus; set { _displayStatus = value; Notify(); } }
     public string    ConflictsText { get => _conflictsText; set { _conflictsText = value; Notify(); } }

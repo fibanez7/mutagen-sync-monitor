@@ -85,8 +85,14 @@
         <!-- ── Footer ───────────────────────────────────────────────────────── -->
         <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="0,1,0,0"
                 Padding="0,8,0,0" Margin="0,8,0,0">
-            <Button HorizontalAlignment="Right" Content="Cerrar"
-                    Padding="16,4" Click="Close_Click"/>
+            <Grid>
+                <Button x:Name="TerminateOrphansBtn" HorizontalAlignment="Left"
+                        Content="Terminar huérfanas" Padding="12,4"
+                        IsEnabled="False" Click="TerminateOrphans_Click"
+                        ToolTip="Sesiones activas en mutagen que no están en config.json"/>
+                <Button HorizontalAlignment="Right" Content="Cerrar"
+                        Padding="16,4" Click="Close_Click"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>

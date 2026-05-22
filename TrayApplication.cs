@@ -442,7 +442,7 @@ public sealed class TrayApplication : IDisposable
     {
         if (_statusWindow == null || !_statusWindow.IsLoaded)
         {
-            _statusWindow = new StatusWindow(_monitor, _config);
+            _statusWindow = new StatusWindow(_monitor, _config, _mutagen);
             _statusWindow.Closed += (_, _) => _statusWindow = null;
             _statusWindow.Show();
         }

@@ -230,7 +230,7 @@ Decidido: **instalador `setup.exe`** (Inno Setup). Solo el que compila necesita 
 
 - Instala en `%LOCALAPPDATA%\Programs\MutagenManager` (`PrivilegesRequired=lowest` → **sin admin**, carpeta escribible → resuelve el problema de permisos de Program Files).
 - Copia `MutagenManager.exe` + `mutagen.exe` + `config.example.json`.
-- Accesos directos: escritorio (opcional) + menú inicio; tarea opcional de inicio con Windows (Startup folder).
+- Accesos directos: escritorio (opcional) + menú inicio. El inicio con Windows lo gestiona la app (HKCU\Run desde el tray), NO el instalador — una sola fuente de verdad. `AutoStartService.ReconcilePath()` reapunta la clave al exe actual tras reinstalar/mover.
 - `AppId` GUID estable → reinstalar **actualiza en sitio**, no duplica. `CloseApplications=yes` cierra la app antes de actualizar para no bloquear ficheros.
 - `config.json` lo crea el exe junto a sí mismo en el primer arranque (`ConfigService.EnsureExists`) y abre Ajustes. La carpeta es escribible, así que funciona instalado.
 
@@ -239,6 +239,19 @@ Decidido: **instalador `setup.exe`** (Inno Setup). Solo el que compila necesita 
 2. Subir el `setup.exe` a GitHub Releases. Instrucción al usuario: ejecutar, configurar servidores en Ajustes. Nada más.
 
 Detalle y checklist en `.claude/tareas.md`.
+
+---
+
+## Sesiones de mutagen vs config.json (huérfanas)
+
+Las sesiones de mutagen viven en el **daemon por-usuario**, identificadas por **nombre**, independientes del binario y del config.json. `DetectChangedSyncs` (SettingsWindow) compara **por nombre**:
+
+- **Cambiar ruta/ignores/server con el MISMO nombre** → `OnConfigSaved` lo detecta y ofrece recrear (`terminate` + `create`). Limpio.
+- **Renombrar el sync** → el nombre viejo NO se termina (queda **huérfano** corriendo) y el nuevo se ve como sync nueva. Borrar en Ajustes (`DeleteSync`) tampoco termina la sesión (deliberado, línea ~136).
+
+Operaciones que SÍ tocan el daemon (tray, por-sync): "Eliminar Sincronización" (`terminate`+quita del config), "Reiniciar Sincronización" (`terminate`+`create`).
+
+**Detección de huérfanas (v3.1):** `StatusWindow` (Ver Estado Global) llama `MutagenService.GetAllSessionNamesAsync()` (parsea `mutagen sync list`), marca las sesiones que no están en config como filas rojas "⚠ Huérfana" y ofrece botón "Terminar huérfanas". También a mano: `mutagen sync list` / `mutagen sync terminate <nombre>`.
 
 ---
 
