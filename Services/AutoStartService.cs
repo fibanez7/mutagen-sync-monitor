@@ -17,6 +17,27 @@ public class AutoStartService
         return key?.GetValue(AppName) != null;
     }
 
+    /// <summary>Returns the exe path currently registered for autostart (unquoted), or null.</summary>
+    public string? GetRegisteredPath()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
+        return (key?.GetValue(AppName) as string)?.Trim('"');
+    }
+
+    /// <summary>
+    /// If autostart is enabled but points to a different exe (e.g. after a reinstall to a new
+    /// folder), rewrite it to the current exe so Windows launches the right binary. No-op otherwise.
+    /// </summary>
+    public void ReconcilePath(string currentExePath)
+    {
+        var registered = GetRegisteredPath();
+        if (registered != null &&
+            !string.Equals(registered, currentExePath, System.StringComparison.OrdinalIgnoreCase))
+        {
+            Enable(currentExePath);
+        }
+    }
+
     public bool Enable(string exePath)
     {
         try

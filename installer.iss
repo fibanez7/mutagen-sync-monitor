@@ -47,7 +47,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
-Name: "startupicon"; Description: "Iniciar Mutagen Manager con Windows"; GroupDescription: "Inicio:"; Flags: unchecked
+; Nota: el inicio con Windows se gestiona desde el menú tray de la app (HKCU\Run),
+; no aquí, para tener una única fuente de verdad y no duplicar mecanismos.
 
 [Files]
 Source: "dist\{#AppExe}";        DestDir: "{app}"; Flags: ignoreversion
@@ -58,8 +59,6 @@ Source: "config.example.json";   DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\{#AppName}";              Filename: "{app}\{#AppExe}"
 Name: "{group}\Desinstalar {#AppName}";  Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#AppName}";        Filename: "{app}\{#AppExe}"; Tasks: desktopicon
-; Optional Startup-folder launch (the app also offers HKCU\Run from its tray menu)
-Name: "{userstartup}\{#AppName}";        Filename: "{app}\{#AppExe}"; Tasks: startupicon
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Iniciar Mutagen Manager"; Flags: nowait postinstall skipifsilent

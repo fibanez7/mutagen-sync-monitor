@@ -68,7 +68,8 @@ public sealed class TrayApplication : IDisposable
     public void Initialize()
     {
         IconRenderer.LoadBaseIcon();
-        _configService.EnsureExists();   // create config.json next to exe if missing
+        _configService.EnsureExists();          // create config.json next to exe if missing
+        _autoStart.ReconcilePath(_exePath);     // fix stale autostart path after a reinstall/move
         LoadConfig();
         BuildTray();
         StartMonitor();
