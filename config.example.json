@@ -1,0 +1,39 @@
+{
+    "servers": {
+        "my-server": {
+            "host": "192.168.1.100",
+            "port": 22,
+            "user": "your-username",
+            "defaultOwner": "prueba",
+            "defaultGroup": "prueba"
+        }
+    },
+    "syncs": [
+        {
+            "name": "my-project",
+            "server": "my-server",
+            "localPath": "C:\\Projects\\MyApp",
+            "remotePath": "/var/www/myapp",
+            "ignores": [
+                "node_modules",
+                ".git",
+                "*.log",
+                ".env",
+                "cache"
+            ]
+        }
+    ],
+    "defaults": {
+        "mode": "two-way-safe",
+        "fileMode": "0664",
+        "directoryMode": "0775",
+        "checkInterval": 15
+    },
+    "notifications": {
+        "enabled": true,
+        "sound": true,
+        "showOnConflict": true,
+        "showOnDisconnect": true,
+        "showOnResume": true
+    }
+}

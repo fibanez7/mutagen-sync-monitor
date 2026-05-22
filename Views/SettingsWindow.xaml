@@ -1,0 +1,148 @@
+<Window x:Class="MutagenManager.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configuración — Mutagen Manager"
+        Width="760" Height="580"
+        MinWidth="600" MinHeight="460"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Margin" Value="4,0"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="Padding" Value="0,4,8,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Margin="8,8,8,0">
+
+            <!-- ═══ TAB: SYNCS ════════════════════════════════════════════════ -->
+            <TabItem Header="Sincronizaciones">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ListView x:Name="SyncList" Grid.Row="0" SelectionMode="Single"
+                              SelectionChanged="SyncList_SelectionChanged">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Nombre"       Width="130" DisplayMemberBinding="{Binding Name}"/>
+                                <GridViewColumn Header="Servidor"     Width="100" DisplayMemberBinding="{Binding Server}"/>
+                                <GridViewColumn Header="Ruta Local"   Width="200" DisplayMemberBinding="{Binding LocalPath}"/>
+                                <GridViewColumn Header="Ruta Remota"  Width="200" DisplayMemberBinding="{Binding RemotePath}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="+ Añadir"   Click="AddSync_Click"   x:Name="AddSyncBtn"    IsEnabled="False"/>
+                        <Button Content="✎ Editar"   Click="EditSync_Click"  x:Name="EditSyncBtn"   IsEnabled="False"/>
+                        <Button Content="✕ Eliminar" Click="DeleteSync_Click" x:Name="DeleteSyncBtn" IsEnabled="False"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ═══ TAB: SERVERS ══════════════════════════════════════════════ -->
+            <TabItem Header="Servidores">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ListView x:Name="ServerList" Grid.Row="0" SelectionMode="Single"
+                              SelectionChanged="ServerList_SelectionChanged">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Clave"    Width="120" DisplayMemberBinding="{Binding Key}"/>
+                                <GridViewColumn Header="Host"     Width="150" DisplayMemberBinding="{Binding Host}"/>
+                                <GridViewColumn Header="Puerto"   Width="70"  DisplayMemberBinding="{Binding Port}"/>
+                                <GridViewColumn Header="Usuario"  Width="100" DisplayMemberBinding="{Binding User}"/>
+                                <GridViewColumn Header="Owner"    Width="90"  DisplayMemberBinding="{Binding DefaultOwner}"/>
+                                <GridViewColumn Header="Group"    Width="90"  DisplayMemberBinding="{Binding DefaultGroup}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="+ Añadir"   Click="AddServer_Click"/>
+                        <Button Content="✎ Editar"   Click="EditServer_Click"   x:Name="EditServerBtn"   IsEnabled="False"/>
+                        <Button Content="✕ Eliminar" Click="DeleteServer_Click"  x:Name="DeleteServerBtn" IsEnabled="False"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ═══ TAB: GENERAL ══════════════════════════════════════════════ -->
+            <TabItem Header="General">
+                <ScrollViewer Margin="8">
+                    <StackPanel>
+                        <Label Content="Modo de sincronización"/>
+                        <ComboBox x:Name="ModeCombo" Margin="0,0,0,12">
+                            <ComboBoxItem Content="two-way-safe"     Tag="two-way-safe"/>
+                            <ComboBoxItem Content="two-way-resolved" Tag="two-way-resolved"/>
+                            <ComboBoxItem Content="one-way-replica"  Tag="one-way-replica"/>
+                            <ComboBoxItem Content="one-way-safe"     Tag="one-way-safe"/>
+                        </ComboBox>
+
+                        <Label Content="Permisos de archivos (octal)"/>
+                        <TextBox x:Name="FileModeBox" Width="120" HorizontalAlignment="Left"
+                                 TextChanged="FileModeBox_TextChanged"/>
+
+                        <Label Content="Permisos de directorios (octal)"/>
+                        <TextBox x:Name="DirModeBox"  Width="120" HorizontalAlignment="Left"
+                                 TextChanged="DirModeBox_TextChanged"/>
+
+                        <Label Content="Intervalo de comprobación (segundos)"/>
+                        <TextBlock Text="Cuándo hay problemas activos el intervalo baja a 5s automáticamente."
+                                   FontStyle="Italic" Foreground="#777" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBox x:Name="IntervalBox"  Width="80" HorizontalAlignment="Left"
+                                 TextChanged="IntervalBox_TextChanged"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ═══ TAB: NOTIFICATIONS ════════════════════════════════════════ -->
+            <TabItem Header="Notificaciones">
+                <StackPanel Margin="16">
+                    <CheckBox x:Name="NotifEnabled"     Content="Activar notificaciones" Margin="0,8"/>
+                    <CheckBox x:Name="NotifSound"       Content="Sonido en notificaciones" Margin="0,4"/>
+                    <CheckBox x:Name="NotifConflict"    Content="Notificar al detectar conflicto" Margin="0,4"/>
+                    <CheckBox x:Name="NotifDisconnect"  Content="Notificar al perder conexión" Margin="0,4"/>
+                    <CheckBox x:Name="NotifResume"      Content="Notificar al recuperar sincronización" Margin="0,4"/>
+                </StackPanel>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Footer -->
+        <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="0,1,0,0"
+                Padding="8,8,8,8">
+            <Grid>
+                <TextBlock x:Name="StatusLabel" VerticalAlignment="Center"
+                           Foreground="#388E3C" FontStyle="Italic"/>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button Content="Guardar" Click="Save_Click"
+                            Background="#E8F5E9" FontWeight="SemiBold"/>
+                    <Button Content="Cancelar" Click="Cancel_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

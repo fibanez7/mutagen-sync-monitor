@@ -1,0 +1,54 @@
+# ===================================
+# User Configuration (DO NOT commit)
+# ===================================
+
+# Personal config — use config.example.json as template
+config.json
+
+# ===================================
+# .NET / C# Build Artifacts
+# ===================================
+
+# Compiled output
+bin/
+obj/
+
+# Published exe (distributed via GitHub Releases, not committed)
+dist/
+
+# NuGet
+*.nupkg
+
+# ===================================
+# System Files
+# ===================================
+
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*~
+
+# ===================================
+# IDE
+# ===================================
+
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# ===================================
+# Claude Code (local tooling config — not for public repo)
+# ===================================
+
+.claude/memory/
+.claude/agents/
+
+# ===================================
+# Logs & Temp
+# ===================================
+
+*.log
+*.tmp
+*.temp

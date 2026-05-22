@@ -1,0 +1,56 @@
+<Window x:Class="MutagenManager.Views.ServerEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Servidor" Width="420" Height="360"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="Padding" Value="0,6,0,2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Label Content="Clave (identificador, p.ej. my-server)"/>
+                <TextBox x:Name="KeyBox"/>
+
+                <Label Content="Host (IP o dominio)"/>
+                <TextBox x:Name="HostBox"/>
+
+                <Label Content="Puerto SSH"/>
+                <TextBox x:Name="PortBox" Text="22"/>
+
+                <Label Content="Usuario SSH"/>
+                <TextBox x:Name="UserBox"/>
+
+                <Label Content="Owner por defecto (beta, opcional)"/>
+                <TextBox x:Name="OwnerBox"/>
+
+                <Label Content="Group por defecto (beta, opcional)"/>
+                <TextBox x:Name="GroupBox"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Guardar" Padding="12,5" Click="Save_Click"
+                        Background="#E8F5E9" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                <Button Content="Cancelar" Padding="12,5" Click="Cancel_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

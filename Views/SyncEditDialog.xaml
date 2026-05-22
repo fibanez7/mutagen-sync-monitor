@@ -1,0 +1,69 @@
+<Window x:Class="MutagenManager.Views.SyncEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sincronización" Width="500" Height="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="Padding" Value="0,6,0,2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Label Content="Nombre (identificador único)"/>
+                <TextBox x:Name="NameBox"/>
+
+                <Label Content="Servidor (clave del servidor configurado)"/>
+                <ComboBox x:Name="ServerCombo" Margin="0,0,0,10"/>
+
+                <Label Content="Ruta local (Windows)"/>
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="LocalPathBox" Grid.Column="0" Margin="0"/>
+                    <Button Grid.Column="1" Content="..." Padding="8,3" Margin="4,0,0,0"
+                            Click="BrowseLocal_Click"/>
+                </Grid>
+
+                <Label Content="Ruta remota (Linux)"/>
+                <TextBox x:Name="RemotePathBox"/>
+
+                <Label Content="Ignores (uno por línea, sintaxis gitignore)"/>
+                <TextBox x:Name="IgnoresBox" Height="80" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="12"/>
+
+                <Label Content="Owner (beta, opcional — sobreescribe el del servidor)"/>
+                <TextBox x:Name="OwnerBox"/>
+
+                <Label Content="Group (beta, opcional — sobreescribe el del servidor)"/>
+                <TextBox x:Name="GroupBox"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Guardar" Padding="12,5" Click="Save_Click"
+                        Background="#E8F5E9" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                <Button Content="Cancelar" Padding="12,5" Click="Cancel_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

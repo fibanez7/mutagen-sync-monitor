@@ -1,0 +1,114 @@
+<Window x:Class="MutagenManager.Views.ConflictWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resolución de Conflictos — Mutagen Manager"
+        Width="720" Height="600"
+        MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="MinWidth" Value="90"/>
+            <Setter Property="Margin" Value="4,0"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Padding" Value="8"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- selector de sync -->
+            <RowDefinition Height="Auto"/>  <!-- contador -->
+            <RowDefinition Height="*"/>     <!-- detalle conflicto -->
+            <RowDefinition Height="Auto"/>  <!-- acciones -->
+            <RowDefinition Height="Auto"/>  <!-- botones globales -->
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: sync selector -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="Sincronización:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+            <ComboBox x:Name="SyncSelector" Width="220" SelectionChanged="SyncSelector_SelectionChanged"/>
+            <Button Content="↻ Actualizar" Margin="12,0,0,0" Click="RefreshButton_Click"/>
+        </StackPanel>
+
+        <!-- Row 1: progress label -->
+        <TextBlock x:Name="ProgressLabel" Grid.Row="1"
+                   Text="Cargando..." FontSize="13" FontWeight="SemiBold"
+                   Foreground="#D32F2F" Margin="0,0,0,8"/>
+
+        <!-- Row 2: conflict detail -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="FilePathLabel" Grid.Row="0"
+                       FontSize="14" FontWeight="Bold"
+                       Margin="0,0,0,6" TextWrapping="Wrap"/>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Alpha (local) -->
+                <GroupBox Grid.Column="0" Header="LOCAL (Alpha)" BorderBrush="#1976D2">
+                    <StackPanel>
+                        <TextBlock x:Name="AlphaRaw" TextWrapping="Wrap" FontFamily="Consolas"
+                                   FontSize="11" Foreground="#333" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="AlphaDate" FontStyle="Italic" Foreground="#555"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Beta (remote) -->
+                <GroupBox Grid.Column="1" Header="REMOTO (Beta)" BorderBrush="#7B1FA2">
+                    <StackPanel>
+                        <TextBlock x:Name="BetaRaw" TextWrapping="Wrap" FontFamily="Consolas"
+                                   FontSize="11" Foreground="#333" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="BetaDate" FontStyle="Italic" Foreground="#555"/>
+                    </StackPanel>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <!-- Row 3: per-conflict actions -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal"
+                    HorizontalAlignment="Center" Margin="0,10,0,4">
+            <Button x:Name="UseLocalBtn"  Content="✔ Usar Local"  Background="#E3F2FD"
+                    Click="UseLocal_Click"/>
+            <Button x:Name="UseRemoteBtn" Content="✔ Usar Remoto" Background="#F3E5F5"
+                    Click="UseRemote_Click"/>
+            <Button x:Name="VsCodeBtn"    Content="⬡ Comparar VS Code"
+                    Click="VsCode_Click"/>
+            <Button x:Name="SkipBtn"      Content="→ Saltar"
+                    Click="Skip_Click"/>
+        </StackPanel>
+
+        <!-- Row 4: global actions + navigation -->
+        <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Content="Todos: Local"  Background="#BBDEFB" Click="AllLocal_Click"/>
+                    <Button Content="Todos: Remoto" Background="#E1BEE7" Click="AllRemote_Click"/>
+                    <Button Content="↺ Reset Sync"  Background="#FFF9C4" Click="Reset_Click"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="← Anterior" Click="Prev_Click"/>
+                    <Button Content="Siguiente →" Click="Next_Click"/>
+                    <Button Content="Cerrar" Click="Close_Click" Margin="16,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
