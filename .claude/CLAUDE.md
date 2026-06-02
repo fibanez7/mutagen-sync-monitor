@@ -1,10 +1,10 @@
 # Mutagen Manager — Documentación interna para Claude
 
-## Estado actual: v3.1 (2026-05-11)
+## Estado actual: v3.1.1 (2026-06-02)
 
 App de bandeja (system tray) en **C# .NET 8 WPF + WinForms** que gestiona syncs de [Mutagen](https://mutagen.io) entre Windows y servidores Linux. Migrada desde PowerShell + PS2EXE; los PS1 antiguos ya no existen en el repo. El código fuente vive en la raíz.
 
-> Nota de mantenimiento: `MutagenManager.csproj` declara `AssemblyVersion`/`FileVersion = 3.0.0.0`. Subir a `3.1.0.0` al preparar el Release.
+> Versión actual en `MutagenManager.csproj` e `installer.iss` = `3.1.1`. Subir ambos a la vez en cada Release.
 
 ---
 
@@ -82,8 +82,9 @@ App.xaml.cs (OnStartup)
 
 MonitorService (Task background — NUNCA en UI thread)
     └── MonitorLoopAsync()
-            ├── CheckAllAsync() -> GetStatusAsync() -> MutagenService.SyncListAsync()
-            ├── ParseStatus()               <- parsea "mutagen sync list <name> --long"
+            ├── CheckAllAsync() -> 1× MutagenService.SyncListAsync(--long, sin nombre)  <- batch v3.1.1
+            ├── SplitSessionBlocks()        <- parte el output por "Name:" → bloque por sync
+            ├── ParseStatus()               <- parsea cada bloque (antes: 1 proceso por sync)
             ├── StatusChanged?.Invoke()      <- TrayApplication responde con Dispatcher.Invoke()
             └── NotificationRequested?.Invoke()
 
@@ -112,6 +113,8 @@ Diseño deliberado para no pinguear de más. Intervalo base = `config.Defaults.C
 
 `RequestImmediateCheck()` setea flag `_forceCheck` que el bucle comprueba cada 500ms.
 
+> **Polling batch (v3.1.1):** `CheckAllAsync` hace **1 sola** `mutagen sync list --long` (sin nombre) por poll y reparte el output con `SplitSessionBlocks` (un bloque por `Name:`) → `ParseStatus` por sync. Antes spawneaba 1 proceso mutagen.exe **por sync** por poll (N procesos/intervalo). Ahora el coste es constante con cualquier nº de syncs → escala a varias conexiones sin cargar el equipo. `GetStatusAsync(name)` (por-sync) sigue existiendo para uso puntual de ConflictWindow.
+
 ---
 
 ## Parsing de salida de mutagen
@@ -138,6 +141,8 @@ Indentación: detalles en líneas con `\t\t+` (doble tab o más).
 | Unknown | Gris #9E9E9E | Resto |
 
 Icono del tray = **peor estado** entre todos los syncs.
+
+> **Cache de iconos (fix v3.1.1):** `IconRenderer.GetTrayIcon`/`GetStatusDot` cachean por `SyncStatusCode` (solo 5 estados). Antes re-renderizaban en **cada poll**: `GetTrayIcon` hacía `bmp.GetHicon()` (HICON sin manejar que `Icon.FromHandle` NO posee → nunca destruido) y `GetStatusDot` creaba un Bitmap nuevo por sync. Los handles GDI subían hacia el límite 10000/proceso hasta que el submenú de un sync no podía asignar GDI → items en blanco, cuelgue y cierre (el menú raíz aún pintaba). Fix: render 1 vez + cache; `GetTrayIcon` clona a `Icon` manejado y llama `DestroyIcon(hIcon)`. Los status-dot cacheados son **compartidos** → al recrear el menú (`RebuildSyncMenuItems`) hay que poner `Root.Image = null` antes de `Dispose()` para no liberar el bitmap cacheado.
 
 ---
 
@@ -244,12 +249,14 @@ Detalle y checklist en `.claude/tareas.md`.
 
 ## Sesiones de mutagen vs config.json (huérfanas)
 
-Las sesiones de mutagen viven en el **daemon por-usuario**, identificadas por **nombre**, independientes del binario y del config.json. `DetectChangedSyncs` (SettingsWindow) compara **por nombre**:
+Las sesiones de mutagen viven en el **daemon por-usuario**, identificadas por **nombre**, independientes del binario y del config.json. SettingsWindow compara **por nombre** contra `_originalSyncs` (snapshot al abrir):
 
-- **Cambiar ruta/ignores/server con el MISMO nombre** → `OnConfigSaved` lo detecta y ofrece recrear (`terminate` + `create`). Limpio.
-- **Renombrar el sync** → el nombre viejo NO se termina (queda **huérfano** corriendo) y el nuevo se ve como sync nueva. Borrar en Ajustes (`DeleteSync`) tampoco termina la sesión (deliberado, línea ~136).
+- **Cambiar ruta/ignores/server con el MISMO nombre** → `DetectChangedSyncs` → `OnConfigSaved` ofrece recrear (`terminate` + `create`). Limpio.
+- **Renombrar o eliminar un sync (v3.1.1)** → `DetectOrphanedSessions` devuelve los nombres que estaban en `_originalSyncs` y ya no están → `OnConfigSaved` → `TerminateOrphansAsync` **termina la sesión del daemon** (si existe). Ya NO quedan huérfanas por renombrar/borrar. El borrado en Ajustes avisa de ello.
 
 Operaciones que SÍ tocan el daemon (tray, por-sync): "Eliminar Sincronización" (`terminate`+quita del config), "Reiniciar Sincronización" (`terminate`+`create`).
+
+> **Watchdog del daemon (v3.1.1):** `CheckAllAsync` mira el exit code de `sync list`. Si es ≠0 en **2 polls seguidos** (margen anti-falso-positivo en resume), llama `MutagenService.DaemonStartAsync` (`mutagen daemon start`, idempotente) + balloon + force-check. Detecta daemon caído sin reiniciar el monitor.
 
 **Detección de huérfanas (v3.1):** `StatusWindow` (Ver Estado Global) llama `MutagenService.GetAllSessionNamesAsync()` (parsea `mutagen sync list`), marca las sesiones que no están en config como filas rojas "⚠ Huérfana" y ofrece botón "Terminar huérfanas". También a mano: `mutagen sync list` / `mutagen sync terminate <nombre>`.
 

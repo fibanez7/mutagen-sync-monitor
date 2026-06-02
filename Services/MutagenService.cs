@@ -107,6 +107,13 @@ public class MutagenService
         return names;
     }
 
+    /// <summary>Starts the per-user mutagen daemon. Idempotent — no-op if already running.</summary>
+    public Task<(string, int)> DaemonStartAsync(CancellationToken ct = default)
+    {
+        _log.Log("Daemon start (watchdog)");
+        return MutagenAsync("daemon start", 15_000, ct);
+    }
+
     public Task<(string, int)> SyncPauseAsync(string name, CancellationToken ct = default)
     {
         _log.Log($"Pause sync: {name}");

@@ -1,72 +1,52 @@
-<!-- Tareas pendientes de implementar en Mutagen Manager -->
+<!-- Tareas / backlog Mutagen Manager. Histórico viejo (v3.0/v3.1) podado — ver git log. -->
 
-## Completadas en v3.0 (2026-03-30)
-
-### Mejoras de interfaz
-- [x] Iconos en menú tray con Segoe MDL2 Assets (`IconRenderer.MakeGlyphIcon`)
-- [x] `Ver Estado Global` → `StatusWindow` WPF nativa (en lugar de PowerShell)
-- [x] `Ver Logs` → `LogViewerWindow` WPF con auto-refresh (en lugar de Notepad)
-- [x] Pausar/Reanudar deshabilitados según estado real del sync
-- [x] Doble-click inteligente: ConflictWindow si hay problemas, StatusWindow si no
-- [x] Auto-abrir Configuración en primera ejecución (sin config.json)
-- [x] Menú "Acerca de" con info de versión y ruta de logs
-- [x] Separador en submenú Ajustes entre "Reiniciar Monitor" y "Configuración"
-
-## Completadas en v3.1 (2026-05-11)
-
-### Estabilidad
-- [x] `SystemEvents.PowerModeChanged` — restart monitor + restaurar icono tras hibernación/sleep
-- [x] Rotación de logs al superar 1MB (`.old` backup automático)
-- [x] Fix: intervalo de polling usaba 30s hardcoded, ahora usa `config.Defaults.CheckInterval`
-
-### Config en caliente
-- [x] Si cambian syncs en Settings → ofrecer recrear en Mutagen (`OnConfigSaved` + `RecreateSyncsAsync`)
-- [x] Si cambian notificaciones/intervalo → `MonitorService.UpdateConfig()` sin reiniciar
-
-### UX / Settings
-- [x] Validación en tiempo real en SettingsWindow: permisos octales (borde rojo si inválido)
-- [x] Validación en tiempo real: intervalo ≥ 5s
-- [x] Deshabilitar "Añadir sync" si no hay ningún servidor configurado
-- [x] Detección de mutagen en PATH al arrancar (balloon de warning si no está)
-- [x] "Acerca de" muestra versión de mutagen detectada
-- [x] Menú por sync: "Forzar Sincronización Ahora" (`mutagen sync flush`)
-
-### Distribución (replanteada)
-- [x] Decisión final: **instalador Inno Setup** per-user (no ZIP). `installer.iss` + `build.ps1 -Installer`
-
-## Completadas en v3.1.1 (2026-05-22)
+## v3.1.1 (2026-06-02) — rendimiento + bugfix GDI
 
 ### Estabilidad / bugfix crítico
-- [x] Fix crash tras hibernaciones múltiples: resume no-bloqueante (`RefreshAfterResume`, sin `.Wait` en UI), `MonitorService.Start()` idempotente (`IsRunning`), loop con auto-recuperación, guard `_resumeHandling`
+- [x] Fix fuga de handles GDI en `IconRenderer`: tray icon (`GetHicon()` sin `DestroyIcon`) y status dots se re-renderizaban cada poll → handles GDI hacia el límite 10000/proceso → submenú de sync en blanco, colgado y cierre. Fix: cache por `SyncStatusCode` + clon manejado + `DestroyIcon` del HICON transitorio.
+- [x] Cache de `MakeGlyphIcon` (set fijo de glyphs) → cero re-render/fuga al recrear menú.
+- [x] `RebuildSyncMenuItems` dispone los items (libera handles de dropdown) anulando antes las imágenes compartidas (`DetachImages`).
 
-### Integración cliente
-- [x] `mutagen.exe` bundleado junto al programa; `MutagenService` lo resuelve por ruta (no PATH)
-- [x] `MutagenUpdater`: actualizar CLI a demanda desde GitHub (menú Ajustes → "Actualizar Mutagen CLI…")
-- [x] `ConfigService.EnsureExists()`: crea config.json al lado del exe en primer arranque
-- [x] Instalador per-user en `%LOCALAPPDATA%\Programs\MutagenManager` (sin admin), accesos directos, opción inicio con Windows
-- [x] Versión a 3.1.0.0 (csproj) + texto "Acerca de"
-- [x] `config.json` sacado del control de versiones (`git rm --cached`)
+### Rendimiento (ligereza + varias conexiones)
+- [x] **Polling batch:** `CheckAllAsync` hacía 1 proceso `mutagen.exe` por sync por poll (N procesos/intervalo). Ahora **1 sola** llamada `mutagen sync list --long` por poll y se parsea por nombre (`SplitSessionBlocks`). Coste constante sin importar cuántas syncs → soporta varias conexiones sin penalizar el sistema.
 
----
+### Ciclo de vida de sesiones / robustez
+- [x] **Limpiar huérfana al renombrar/eliminar:** `DetectOrphanedSessions` (SettingsWindow) + `TerminateOrphansAsync` (TrayApplication) terminan la sesión del daemon de syncs que desaparecen del config. Ya no quedan huérfanas.
+- [x] **Watchdog del daemon:** `CheckAllAsync` reinicia `mutagen daemon start` tras 2 polls con exit≠0 seguidos (margen anti-falso-positivo). Balloon + force-check.
 
-## Pendientes
-
-- [ ] (Builder) Instalar Inno Setup 6: `winget install JRSoftware.InnoSetup`
-- [ ] GitHub Release con `MutagenManager-Setup-3.1.0.exe`
-- [ ] (Seguridad) Force-push tras reescribir historial para purgar config.json — ver sección abajo
+### Versión
+- [x] 3.1.1.0 en `MutagenManager.csproj` + `installer.iss`.
 
 ---
 
-## Pasos GitHub Release (instalador)
+## Hecho antes (v3.1.0, ya en producción)
+- [x] config.json purgado del historial git (verificado: no aparece en `git log`).
+- [x] Primera Release publicada en GitHub (repo `fibanez7/mutagen-sync-monitor`).
 
-1. `.\build.ps1 -Installer` → `dist\MutagenManager.exe` + `mutagen.exe` bundle + `dist\MutagenManager-Setup-3.1.0.exe`
-2. Subir el `setup.exe` al Release de GitHub
-3. Instrucción al usuario:
-   - Ejecutar `MutagenManager-Setup-3.1.0.exe` (no requiere admin)
-   - Se instala en la carpeta de usuario; opción de acceso directo e inicio con Windows
-   - Abrir, configurar servidores/syncs en Ajustes — listo (mutagen ya viene incluido)
-   - Actualizar el CLI cuando se quiera: tray → Ajustes → "Actualizar Mutagen CLI…"
+---
 
-### Pin de versión del CLI
-- Por defecto `build.ps1` bundlea la **última** release de mutagen al compilar.
-- Para fijar una versión conocida-buena: `.\build.ps1 -Installer -MutagenVersion v0.18.1`
+## Pendiente — lanzar Release 3.1.1
+- [ ] `winget install JRSoftware.InnoSetup` (si ISCC.exe no está en el equipo).
+- [ ] `.\build.ps1 -Installer` → `dist\MutagenManager-Setup-3.1.1.exe`.
+- [ ] Subir el `setup.exe` 3.1.1 a GitHub Releases (changelog: fix GDI + polling batch).
+- [ ] Probar update-en-sitio: ejecutar el setup sobre la instalación existente (NO desinstalar; `AppId` estable actualiza encima, `CloseApplications=yes` cierra la app, config.json se conserva).
+
+---
+
+## Backlog (mejoras futuras — no bloquean release)
+
+Criterio: solo cosas que aporten valor real, simples, sin penalizar rendimiento del equipo (tray debe ser ligero).
+
+### Diagnóstico
+- [x] Log de handles GDI/USER al arrancar + cada hora (`GetGuiResources`) para cazar regresiones de la fuga sin Task Manager. Coste mínimo. (`TrayApplication.LogHandleCounts`)
+
+### Descartadas (no aportan / no gratis)
+- UX: progreso en flush, botón carpeta remota → poco valor, añaden complejidad.
+- Firma code-signing → requiere cert de pago.
+- Auto-update de la app → complejidad + red al arrancar; ya hay update del CLI a demanda.
+
+---
+
+## Notas de build/release
+- `build.ps1` bundlea la **última** mutagen por defecto. Fijar versión: `.\build.ps1 -Installer -MutagenVersion v0.18.1`.
+- Subir csproj **e** installer.iss a la vez en cada bump de versión.

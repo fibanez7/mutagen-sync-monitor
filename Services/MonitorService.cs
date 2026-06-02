@@ -129,14 +129,61 @@ public class MonitorService : IDisposable
         _log.Log("MonitorService loop exited");
     }
 
+    private int _daemonDownPolls;
+
     private async Task CheckAllAsync(CancellationToken ct)
     {
+        if (_config.Syncs.Count == 0) return;
+
+        // ONE daemon query for all sessions per poll, then parse per-name from the
+        // combined output. Previously this spawned one mutagen.exe per sync per poll
+        // (N processes / interval) — heavy with several connections. Now it's a single
+        // process regardless of how many syncs are configured.
+        string output;
+        int exit;
+        try
+        {
+            (output, exit) = await _mutagen.SyncListAsync(longOutput: true, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _log.Log($"Error listing syncs: {ex.Message}");
+            output = "";
+            exit = -1;
+        }
+
+        // Daemon watchdog: a non-zero exit from `sync list` means the per-user daemon
+        // is down (mutagen normally auto-starts it). Require two consecutive bad polls
+        // before acting, so a transient hiccup (e.g. right after resume) doesn't trigger
+        // a needless restart. `daemon start` is idempotent.
+        if (exit != 0)
+        {
+            if (++_daemonDownPolls >= 2)
+            {
+                _daemonDownPolls = 0;
+                _log.Log("Watchdog: mutagen daemon appears down — restarting");
+                NotificationRequested?.Invoke("Daemon mutagen", "Daemon caído — reiniciando…", "Warning");
+                try
+                {
+                    await _mutagen.DaemonStartAsync(ct);
+                    _forceCheck = true; // re-check promptly once it's back
+                }
+                catch (Exception ex) { _log.Log($"Watchdog daemon start failed: {ex.Message}"); }
+            }
+            return; // nothing useful to parse this poll
+        }
+        _daemonDownPolls = 0;
+
+        var blocks = SplitSessionBlocks(output);
+
         foreach (var sync in _config.Syncs)
         {
             if (ct.IsCancellationRequested) break;
             try
             {
-                var status = await GetStatusAsync(sync.Name, ct);
+                var status = blocks.TryGetValue(sync.Name, out var block)
+                    ? ParseStatus(sync.Name, block)
+                    : new SyncStatus { Name = sync.Name, Code = SyncStatusCode.Unknown, RawStatus = "Not found" };
                 UpdateStatus(status);
             }
             catch (Exception ex)
@@ -144,6 +191,41 @@ public class MonitorService : IDisposable
                 _log.Log($"Error checking {sync.Name}: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Splits the combined `mutagen sync list --long` output into per-session blocks
+    /// keyed by session name. A new block starts at each line beginning with "Name:",
+    /// so it's robust whether or not the daemon prints dashed separators between entries.
+    /// </summary>
+    internal static Dictionary<string, string> SplitSessionBlocks(string output)
+    {
+        var blocks = new Dictionary<string, string>();
+        if (string.IsNullOrWhiteSpace(output)) return blocks;
+
+        var nameRegex = new Regex(@"^Name:\s*(.+?)\s*$");
+        string? currentName = null;
+        var sb = new System.Text.StringBuilder();
+
+        void Flush()
+        {
+            if (currentName != null) blocks[currentName] = sb.ToString();
+            sb.Clear();
+        }
+
+        foreach (var raw in output.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            var m = nameRegex.Match(line);
+            if (m.Success)
+            {
+                Flush();
+                currentName = m.Groups[1].Value.Trim();
+            }
+            if (currentName != null) sb.Append(line).Append('\n');
+        }
+        Flush();
+        return blocks;
     }
 
     private void UpdateStatus(SyncStatus newStatus)

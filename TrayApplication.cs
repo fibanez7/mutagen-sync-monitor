@@ -51,6 +51,25 @@ public sealed class TrayApplication : IDisposable
     private StatusWindow?    _statusWindow;
     private LogViewerWindow? _logWindow;
 
+    // Lightweight leak watchdog: logs GDI/USER handle counts so a future regression of
+    // the v3.1.1 GDI fix is visible in the log without Task Manager. Near-zero cost.
+    private System.Threading.Timer? _handleDiagTimer;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetGuiResources(IntPtr hProcess, int uiFlags);
+
+    private void LogHandleCounts(string when)
+    {
+        try
+        {
+            var h    = System.Diagnostics.Process.GetCurrentProcess().Handle;
+            int gdi  = GetGuiResources(h, 0); // GR_GDIOBJECTS
+            int user = GetGuiResources(h, 1); // GR_USEROBJECTS
+            _log.Log($"Handles [{when}]: GDI={gdi} USER={user}");
+        }
+        catch (Exception ex) { _log.Log($"Handle diag error: {ex.Message}"); }
+    }
+
     public TrayApplication()
     {
         _exePath   = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
@@ -77,6 +96,9 @@ public sealed class TrayApplication : IDisposable
         _ = CheckMutagenOnStartupAsync();
 
         _log.Log($"MutagenManager v3 started — config: {_configService.ConfigPath}");
+        LogHandleCounts("startup");
+        _handleDiagTimer = new System.Threading.Timer(
+            _ => LogHandleCounts("hourly"), null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
 
         // Auto-open Settings on first run (no config.json found)
         if (_firstRun)
@@ -229,9 +251,16 @@ public sealed class TrayApplication : IDisposable
 
     private void RebuildSyncMenuItems()
     {
-        // Remove old sync root items
+        // Remove old sync root items and dispose them to free the dropdown handles.
+        // All item images are shared cached bitmaps (status dots + glyphs), so null
+        // every image first — otherwise ToolStripItem.Dispose would dispose the
+        // cached bitmaps and break the next rebuild.
         foreach (var entry in _syncItems.Values)
+        {
             _menu.Items.Remove(entry.Root);
+            DetachImages(entry.Root);
+            entry.Root.Dispose();
+        }
         _syncItems.Clear();
 
         // Insert after header + separator (index 2)
@@ -242,6 +271,17 @@ public sealed class TrayApplication : IDisposable
             _syncItems[sync.Name] = entry;
             _menu.Items.Insert(insertAt++, entry.Root);
         }
+    }
+
+    /// <summary>
+    /// Recursively nulls the Image of a menu item and its children so disposing the
+    /// item doesn't dispose the shared cached bitmaps from IconRenderer.
+    /// </summary>
+    private static void DetachImages(ToolStripMenuItem item)
+    {
+        item.Image = null;
+        foreach (var child in item.DropDownItems)
+            if (child is ToolStripMenuItem mi) DetachImages(mi);
     }
 
     private SyncMenuEntry BuildSyncMenuItem(SyncConfig sync)
@@ -510,10 +550,15 @@ public sealed class TrayApplication : IDisposable
         }
     }
 
-    private void OnConfigSaved(List<SyncConfig> changedSyncs)
+    private void OnConfigSaved(List<SyncConfig> changedSyncs, List<string> orphanedNames)
     {
         ReloadConfig();
         _monitor.UpdateConfig(_config); // hot-reload notifications + interval
+
+        // Terminate daemon sessions for syncs that were renamed or deleted, so they
+        // don't keep running as orphans. Fire-and-forget; logs + balloons report it.
+        if (orphanedNames.Count > 0)
+            _ = TerminateOrphansAsync(orphanedNames);
 
         if (changedSyncs.Count == 0) return;
 
@@ -527,6 +572,22 @@ public sealed class TrayApplication : IDisposable
         if (result != MessageBoxResult.Yes) return;
 
         _ = RecreateSyncsAsync(changedSyncs);
+    }
+
+    private async Task TerminateOrphansAsync(List<string> names)
+    {
+        foreach (var name in names)
+        {
+            // Only terminate if the session actually exists in the daemon (the user may
+            // have deleted a sync that was never created, or already terminated it).
+            if (!await _mutagen.SyncExistsAsync(name)) continue;
+
+            _log.Log($"Terminating orphan session '{name}' (renamed/deleted in config)");
+            await _mutagen.SyncTerminateAsync(name);
+            ShowBalloon("Sesión terminada", $"'{name}' eliminada del daemon de Mutagen.", ToolTipIcon.Info);
+        }
+
+        _monitor.RequestImmediateCheck();
     }
 
     private async Task RecreateSyncsAsync(List<SyncConfig> syncs)
@@ -643,6 +704,7 @@ public sealed class TrayApplication : IDisposable
     private void OnExit()
     {
         _log.Log("MutagenManager exiting");
+        _handleDiagTimer?.Dispose();
         _tray.Visible = false;
         Application.Current.Shutdown();
     }

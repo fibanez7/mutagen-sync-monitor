@@ -27,9 +27,11 @@ public partial class SettingsWindow : Window
     private readonly ConfigService _configService;
     private AppConfig _config;
 
-    // Raised when the user saves. Parameter: list of sync names that changed
-    // and exist in mutagen (i.e. need to be recreated).
-    public event Action<List<SyncConfig>>? ConfigSaved;
+    // Raised when the user saves. Args:
+    //   changedSyncs  — existing syncs modified in a way that needs mutagen recreate.
+    //   orphanedNames — sync names that existed at open but are gone now (renamed or
+    //                   deleted); their daemon sessions should be terminated.
+    public event Action<List<SyncConfig>, List<string>>? ConfigSaved;
 
     private readonly ObservableCollection<SyncConfig> _syncs  = [];
     private readonly ObservableCollection<ServerRow>  _servers = [];
@@ -133,7 +135,7 @@ public partial class SettingsWindow : Window
     {
         if (SyncList.SelectedItem is not SyncConfig selected) return;
         var result = MessageBox.Show(
-            $"¿Eliminar la sincronización '{selected.Name}' del config?\n(No termina la sesión de Mutagen activa.)",
+            $"¿Eliminar la sincronización '{selected.Name}'?\n(Al guardar se terminará también su sesión de Mutagen.)",
             "Confirmar", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result == MessageBoxResult.Yes)
         {
@@ -250,9 +252,24 @@ public partial class SettingsWindow : Window
         _configService.Save(_config);
         StatusLabel.Text = "✔ Configuración guardada.";
 
-        // Detect which existing syncs changed (need mutagen recreate)
-        var changedSyncs = DetectChangedSyncs(_config.Syncs);
-        ConfigSaved?.Invoke(changedSyncs);
+        // Detect which existing syncs changed (need mutagen recreate) and which
+        // disappeared (renamed/deleted → orphan daemon session to terminate).
+        var changedSyncs  = DetectChangedSyncs(_config.Syncs);
+        var orphanedNames = DetectOrphanedSessions(_config.Syncs);
+        ConfigSaved?.Invoke(changedSyncs, orphanedNames);
+    }
+
+    /// <summary>
+    /// Sync names that existed when the window opened but are no longer present
+    /// (the user renamed or deleted them). Their mutagen sessions are now orphaned.
+    /// </summary>
+    private List<string> DetectOrphanedSessions(List<SyncConfig> newSyncs)
+    {
+        var newNames = new HashSet<string>(newSyncs.Select(s => s.Name));
+        return _originalSyncs
+            .Where(o => !newNames.Contains(o.Name))
+            .Select(o => o.Name)
+            .ToList();
     }
 
     /// <summary>

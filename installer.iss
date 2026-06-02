@@ -12,7 +12,7 @@
 ; ============================================================================
 
 #define AppName        "Mutagen Manager"
-#define AppVersion      "3.1.0"
+#define AppVersion      "3.1.1"
 #define AppPublisher    "fibanez7"
 #define AppExe          "MutagenManager.exe"
 ; Stable GUID — keeps upgrades in place instead of duplicating installs.
