@@ -66,3 +66,36 @@ Filename: "{app}\{#AppExe}"; Description: "Iniciar Mutagen Manager"; Flags: nowa
 [UninstallDelete]
 ; Remove the bundled-CLI rollback copy if present; leave user config.json untouched.
 Type: files; Name: "{app}\mutagen.exe.old"
+
+[Code]
+{ Stops the running mutagen daemon and the tray app so their .exe files aren't locked
+  during install/uninstall. The daemon is a windowless background process, so Inno's
+  CloseApplications/RestartManager can't close it — we stop it explicitly with
+  `mutagen daemon stop`. Sync sessions are persisted on disk by the daemon, so this
+  only PAUSES syncing; the app restarts the daemon on next launch and syncs resume. }
+procedure StopMutagenProcesses;
+var
+  ResultCode: Integer;
+  MutagenPath: String;
+begin
+  MutagenPath := ExpandConstant('{app}\mutagen.exe');
+  if FileExists(MutagenPath) then
+    Exec(MutagenPath, 'daemon stop', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  { Close the tray app (it runs as a NotifyIcon without a normal window, so a plain
+    RestartManager close is unreliable). }
+  Exec(ExpandConstant('{cmd}'), '/C taskkill /IM MutagenManager.exe /F /T', '',
+       SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopMutagenProcesses;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    StopMutagenProcesses;
+end;
