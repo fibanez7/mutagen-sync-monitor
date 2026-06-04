@@ -150,13 +150,14 @@ public class MutagenService
         return code == 0 && !string.IsNullOrWhiteSpace(output);
     }
 
-    public async Task<bool> SyncCreateAsync(SyncConfig sync, AppConfig config, CancellationToken ct = default)
+    public async Task<(bool Ok, string Output)> SyncCreateAsync(SyncConfig sync, AppConfig config, CancellationToken ct = default)
     {
         var server = config.Servers.TryGetValue(sync.Server, out var s) ? s : null;
         if (server == null)
         {
-            _log.Log($"Error: servidor '{sync.Server}' no encontrado para '{sync.Name}'");
-            return false;
+            var msg = $"servidor '{sync.Server}' no encontrado para '{sync.Name}'";
+            _log.Log($"Error: {msg}");
+            return (false, msg);
         }
 
         var remoteUrl = $"{server.User}@{server.Host}:{server.Port}:{sync.RemotePath}";
@@ -179,8 +180,10 @@ public class MutagenService
             sb.Append($" --ignore \"{ignore}\"");
 
         _log.Log($"Create sync: {sb}");
-        var (_, code) = await MutagenAsync(sb.ToString(), 60_000, ct);
-        return code == 0;
+        var (output, code) = await MutagenAsync(sb.ToString(), 60_000, ct);
+        if (code != 0)
+            _log.Log($"Create sync '{sync.Name}' FAILED (exit {code}): {output.Trim()}");
+        return (code == 0, output.Trim());
     }
 
     /// <summary>Returns mutagen version string, or null if not found in PATH.</summary>

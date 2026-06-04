@@ -111,7 +111,10 @@ public partial class SettingsWindow : Window
 
     private void AddSync_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SyncEditDialog(null, _config.Servers.Keys.ToList());
+        // Use the live server list (_servers), not _config.Servers — the latter is only
+        // updated on Save, so servers added this session wouldn't appear until restart.
+        var dialog = new SyncEditDialog(null, _servers.Select(s => s.Key).ToList())
+            { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         if (dialog.ShowDialog() == true && dialog.Result != null)
         {
             _syncs.Add(dialog.Result);
@@ -122,7 +125,8 @@ public partial class SettingsWindow : Window
     private void EditSync_Click(object sender, RoutedEventArgs e)
     {
         if (SyncList.SelectedItem is not SyncConfig selected) return;
-        var dialog = new SyncEditDialog(selected, _config.Servers.Keys.ToList());
+        var dialog = new SyncEditDialog(selected, _servers.Select(s => s.Key).ToList())
+            { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         if (dialog.ShowDialog() == true && dialog.Result != null)
         {
             var idx = _syncs.IndexOf(selected);
@@ -155,7 +159,8 @@ public partial class SettingsWindow : Window
 
     private void AddServer_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new ServerEditDialog(null, null);
+        var dialog = new ServerEditDialog(null, null)
+            { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         if (dialog.ShowDialog() == true && dialog.ResultKey != null && dialog.ResultConfig != null)
         {
             _servers.Add(new ServerRow
@@ -179,7 +184,8 @@ public partial class SettingsWindow : Window
             Host = row.Host, Port = row.Port, User = row.User,
             DefaultOwner = row.DefaultOwner, DefaultGroup = row.DefaultGroup,
         };
-        var dialog = new ServerEditDialog(row.Key, cfg);
+        var dialog = new ServerEditDialog(row.Key, cfg)
+            { Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         if (dialog.ShowDialog() == true && dialog.ResultKey != null && dialog.ResultConfig != null)
         {
             var idx = _servers.IndexOf(row);
@@ -273,9 +279,12 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// Returns syncs that existed before AND have changed in a way that
-    /// requires mutagen to recreate the session (ignores, paths, mode, ownership).
-    /// New syncs (not in _originalSyncs) are excluded — they don't exist in mutagen yet.
+    /// Returns syncs that mutagen needs to (re)create on save:
+    ///   - brand-new syncs (not in _originalSyncs) → must be created in the daemon,
+    ///   - existing syncs changed in a way that requires recreate (ignores, paths,
+    ///     mode, ownership).
+    /// RecreateSyncsAsync terminates-if-exists then creates, so it handles both: a new
+    /// sync simply skips the terminate step.
     /// </summary>
     private List<SyncConfig> DetectChangedSyncs(List<SyncConfig> newSyncs)
     {
@@ -283,7 +292,7 @@ public partial class SettingsWindow : Window
         foreach (var newSync in newSyncs)
         {
             var original = _originalSyncs.Find(o => o.Name == newSync.Name);
-            if (original == null) continue; // new sync, not yet in mutagen
+            if (original == null) { changed.Add(newSync); continue; } // new sync → create it
 
             bool differs =
                 original.Server       != newSync.Server       ||

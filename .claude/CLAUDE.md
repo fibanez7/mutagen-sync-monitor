@@ -1,10 +1,18 @@
 # Mutagen Manager — Documentación interna para Claude
 
-## Estado actual: v3.1.1 (2026-06-02)
+## Estado actual: v3.1.2 (2026-06-04)
 
 App de bandeja (system tray) en **C# .NET 8 WPF + WinForms** que gestiona syncs de [Mutagen](https://mutagen.io) entre Windows y servidores Linux. Migrada desde PowerShell + PS2EXE; los PS1 antiguos ya no existen en el repo. El código fuente vive en la raíz.
 
-> Versión actual en `MutagenManager.csproj` e `installer.iss` = `3.1.1`. Subir ambos a la vez en cada Release.
+> Versión actual en `MutagenManager.csproj` e `installer.iss` = `3.1.2`. Subir ambos a la vez en cada Release.
+
+### Fixes v3.1.2
+- **Sync nuevo desde Settings no se creaba:** `DetectChangedSyncs` saltaba los nuevos (`original == null → continue`) → se guardaban en config.json y salían en el menú, pero nunca `mutagen sync create`. Ahora los nuevos se incluyen en la lista que `RecreateSyncsAsync` crea (terminate-if-exists + create; el nuevo salta el terminate).
+- **"No se pudo crear" sin causa:** `SyncCreateAsync` devolvía solo `bool` y descartaba el output. Ahora devuelve `(bool Ok, string Output)`, loguea el fallo y `TrayApplication.ShowCreateError` muestra la salida real + causas habituales. Causa típica en máquina nueva: home/`~/.ssh` del usuario SSH escribible por grupo/otros → `chmod 700 ~ && chmod 700 ~/.ssh`.
+- **Servidores no salían en SyncEditDialog hasta reiniciar:** `AddSync/EditSync_Click` pasaban `_config.Servers.Keys` (solo se actualiza al guardar). Ahora pasan la lista viva `_servers`.
+- **Ventanas detrás del escritorio:** app de tray sin foreground window → `Show()` las dejaba atrás. `TrayApplication.BringToFront` (Show + Activate + toggle Topmost) en las 4 ventanas.
+- **"Reiniciar Monitor" dejaba todo cerrado:** `OnRestart` lanzaba el exe nuevo ANTES de cerrar → instancia nueva veía el mutex tomado → "ya está en ejecución" y se cerraba. Ahora lanza con `--restart`; `App.OnStartup` con ese arg espera ≤10s a que se libere el mutex (`WaitOne`). Flag `_ownsMutex` evita `ReleaseMutex` sobre mutex no poseído.
+- **Cuelgue de Ajustes (diálogo oculto detrás):** `SyncEditDialog`/`ServerEditDialog` se abrían con `ShowDialog()` sin `Owner` → modal, podía quedar detrás de Ajustes (invisible) y bloquear todo (parecía colgado, solo se mataba por Admin de Tareas). Fix: `Owner = this` + `WindowStartupLocation = CenterOwner`. Además `TrayApplication.ShowMessage` da owner/topmost a todos los MessageBox del coordinador para que nunca queden ocultos.
 
 ---
 

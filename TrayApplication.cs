@@ -361,10 +361,11 @@ public sealed class TrayApplication : IDisposable
                 await _mutagen.SyncTerminateAsync(sync.Name);
                 await Task.Delay(2000);
             }
-            var ok = await _mutagen.SyncCreateAsync(freshSync, fresh);
-            ShowBalloon(ok ? "Éxito" : "Error",
-                ok ? $"'{sync.Name}' creada correctamente" : $"No se pudo crear '{sync.Name}'",
-                ok ? ToolTipIcon.Info : ToolTipIcon.Error);
+            var (ok, output) = await _mutagen.SyncCreateAsync(freshSync, fresh);
+            if (ok)
+                ShowBalloon("Éxito", $"'{sync.Name}' creada correctamente", ToolTipIcon.Info);
+            else
+                ShowCreateError(sync.Name, output);
             _monitor.RequestImmediateCheck();
         };
         root.DropDownItems.Add(restartItem);
@@ -376,7 +377,7 @@ public sealed class TrayApplication : IDisposable
         };
         deleteItem.Click += async (_, _) =>
         {
-            var result = MessageBox.Show(
+            var result = ShowMessage(
                 $"¿Eliminar la sincronización '{sync.Name}'?\n\n" +
                 "Esto terminará la sincronización y la eliminará del config.",
                 "Confirmar eliminación", MessageBoxButton.YesNo, MessageBoxImage.Warning);
@@ -484,11 +485,11 @@ public sealed class TrayApplication : IDisposable
         {
             _statusWindow = new StatusWindow(_monitor, _config, _mutagen);
             _statusWindow.Closed += (_, _) => _statusWindow = null;
-            _statusWindow.Show();
+            BringToFront(_statusWindow);
         }
         else
         {
-            _statusWindow.Activate();
+            BringToFront(_statusWindow);
         }
     }
 
@@ -502,11 +503,11 @@ public sealed class TrayApplication : IDisposable
                 _conflictWindow = null;
                 _monitor.RequestImmediateCheck();
             };
-            _conflictWindow.Show();
+            BringToFront(_conflictWindow);
         }
         else
         {
-            _conflictWindow.Activate();
+            BringToFront(_conflictWindow);
         }
     }
 
@@ -532,7 +533,13 @@ public sealed class TrayApplication : IDisposable
     {
         _log.Log("Restarting…");
         _tray.Visible = false;
-        System.Diagnostics.Process.Start(_exePath);
+        // Pass --restart so the new instance waits for THIS one to release the
+        // single-instance mutex instead of bailing with "ya está en ejecución".
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_exePath, "--restart")
+        {
+            UseShellExecute = true,
+            WorkingDirectory = _exeDir,
+        });
         Application.Current.Shutdown();
     }
 
@@ -542,11 +549,11 @@ public sealed class TrayApplication : IDisposable
         {
             _settingsWindow = new SettingsWindow(_config, _configService);
             _settingsWindow.ConfigSaved += OnConfigSaved;
-            _settingsWindow.Show();
+            BringToFront(_settingsWindow);
         }
         else
         {
-            _settingsWindow.Activate();
+            BringToFront(_settingsWindow);
         }
     }
 
@@ -563,8 +570,8 @@ public sealed class TrayApplication : IDisposable
         if (changedSyncs.Count == 0) return;
 
         var names  = string.Join(", ", changedSyncs.Select(s => $"'{s.Name}'"));
-        var result = MessageBox.Show(
-            $"Los siguientes syncs han cambiado y necesitan ser recreados en Mutagen para aplicar los cambios:\n\n{names}\n\n¿Recrear ahora?",
+        var result = ShowMessage(
+            $"Los siguientes syncs se crearán o recrearán en Mutagen para aplicar los cambios:\n\n{names}\n\n¿Aplicar ahora?",
             "Aplicar cambios en Mutagen",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -604,12 +611,12 @@ public sealed class TrayApplication : IDisposable
 
             await Task.Delay(1500);
 
-            var ok = await _mutagen.SyncCreateAsync(sync, freshConfig);
+            var (ok, output) = await _mutagen.SyncCreateAsync(sync, freshConfig);
 
-            ShowBalloon(
-                ok ? "Sync recreada" : "Error",
-                ok ? $"'{sync.Name}' actualizada correctamente." : $"No se pudo recrear '{sync.Name}'. Ver logs.",
-                ok ? ToolTipIcon.Info : ToolTipIcon.Error);
+            if (ok)
+                ShowBalloon("Sync recreada", $"'{sync.Name}' actualizada correctamente.", ToolTipIcon.Info);
+            else
+                ShowCreateError(sync.Name, output);
 
             _log.Log($"Sync '{sync.Name}' recreate: {(ok ? "OK" : "FAILED")}");
         }
@@ -623,11 +630,11 @@ public sealed class TrayApplication : IDisposable
         {
             _logWindow = new LogViewerWindow(_log.LogPath);
             _logWindow.Closed += (_, _) => _logWindow = null;
-            _logWindow.Show();
+            BringToFront(_logWindow);
         }
         else
         {
-            _logWindow.Activate();
+            BringToFront(_logWindow);
         }
     }
 
@@ -638,7 +645,7 @@ public sealed class TrayApplication : IDisposable
         if (!_updater.CanSelfUpdate)
         {
             App.Current.Dispatcher.Invoke(() =>
-                MessageBox.Show(
+                ShowMessage(
                     "mutagen se está usando desde el PATH del sistema, no desde la copia bundleada.\n\n" +
                     "Actualízalo con tu gestor (p.ej. 'winget upgrade Mutagen.Mutagen').",
                     "Actualizar Mutagen CLI", MessageBoxButton.OK, MessageBoxImage.Information));
@@ -652,7 +659,7 @@ public sealed class TrayApplication : IDisposable
         if (latest == null)
         {
             App.Current.Dispatcher.Invoke(() =>
-                MessageBox.Show("No se pudo consultar la última versión (¿sin conexión?).",
+                ShowMessage("No se pudo consultar la última versión (¿sin conexión?).",
                     "Actualizar Mutagen CLI", MessageBoxButton.OK, MessageBoxImage.Warning));
             return;
         }
@@ -660,7 +667,7 @@ public sealed class TrayApplication : IDisposable
         var proceed = false;
         App.Current.Dispatcher.Invoke(() =>
         {
-            var result = MessageBox.Show(
+            var result = ShowMessage(
                 $"Versión instalada: {current ?? "desconocida"}\n" +
                 $"Última disponible: {latest}\n\n" +
                 "RECOMENDACIÓN: actualiza el CLI solo si tienes fallos o mal funcionamiento. " +
@@ -690,7 +697,7 @@ public sealed class TrayApplication : IDisposable
         var mutagenVersion = await _mutagen.CheckVersionAsync();
         var mutagenLine = mutagenVersion != null ? $"mutagen: {mutagenVersion}" : "mutagen: no encontrado en PATH";
         App.Current.Dispatcher.Invoke(() =>
-            MessageBox.Show(
+            ShowMessage(
                 "Mutagen Manager v3.1\n\n" +
                 "Monitor de sincronización Mutagen para Windows.\n" +
                 "Detecta conflictos, gestiona sesiones y notifica cambios de estado.\n\n" +
@@ -808,6 +815,76 @@ public sealed class TrayApplication : IDisposable
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Surfaces the actual mutagen error when a sync can't be created, instead of a
+    /// generic balloon. Common causes: SSH key/permission issues (the remote ~/.ssh and
+    /// home dir must not be group/world-writable — chmod 700 ~), unknown host key on
+    /// first connect, or wrong path/owner.
+    /// </summary>
+    private void ShowCreateError(string syncName, string output)
+    {
+        ShowBalloon("Error", $"No se pudo crear '{syncName}'. Ver detalle.", ToolTipIcon.Error);
+        App.Current.Dispatcher.Invoke(() =>
+            ShowMessage(
+                $"Mutagen no pudo crear la sincronización '{syncName}'.\n\n" +
+                $"Salida de mutagen:\n{(string.IsNullOrWhiteSpace(output) ? "(sin salida)" : output)}\n\n" +
+                "Causas habituales:\n" +
+                "• Permisos SSH en el servidor: el directorio home y ~/.ssh no pueden ser " +
+                "escribibles por grupo/otros. Ejecuta en el servidor:  chmod 700 ~ && chmod 700 ~/.ssh\n" +
+                "• Clave del host desconocida en la primera conexión (acepta el host por SSH una vez).\n" +
+                "• Ruta local/remota o usuario incorrectos.",
+                "Error al crear sincronización", MessageBoxButton.OK, MessageBoxImage.Error));
+    }
+
+    /// <summary>
+    /// Brings a freshly-shown window to the foreground. A tray app has no foreground
+    /// window, so plain Show() leaves new windows behind other apps. Toggling Topmost
+    /// forces Windows to raise it without keeping it always-on-top.
+    /// </summary>
+    private static void BringToFront(Window window)
+    {
+        window.Show();
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+        window.Activate();
+        window.Topmost = true;
+        window.Topmost = false;
+        window.Focus();
+    }
+
+    /// <summary>
+    /// Shows a modal message box that always comes to the foreground. A tray app has no
+    /// main window, so an ownerless MessageBox can open BEHIND the current window —
+    /// invisible yet modal, which looks exactly like a frozen app: no button responds and
+    /// the window won't close until the hidden box is dismissed (only Task Manager kills it).
+    /// Giving it an owner (the active window, or a throwaway topmost one) keeps it on top.
+    /// </summary>
+    private static MessageBoxResult ShowMessage(
+        string text, string caption, MessageBoxButton buttons, MessageBoxImage image)
+    {
+        Window? owner = null;
+        foreach (Window w in Application.Current.Windows)
+        {
+            if (w.IsActive) { owner = w; break; }
+            if (w.IsVisible) owner ??= w;
+        }
+
+        if (owner != null)
+            return MessageBox.Show(owner, text, caption, buttons, image);
+
+        // No app window to own it (called from the tray with everything closed): use a
+        // tiny off-screen topmost window as owner so the box can't hide behind other apps.
+        var temp = new Window
+        {
+            Width = 1, Height = 1, Left = -4000, Top = -4000,
+            WindowStyle = WindowStyle.None, ShowInTaskbar = false,
+            Topmost = true, ShowActivated = true,
+        };
+        temp.Show();
+        try { return MessageBox.Show(temp, text, caption, buttons, image); }
+        finally { temp.Close(); }
+    }
 
     private void ShowBalloon(string title, string text, ToolTipIcon icon)
     {
