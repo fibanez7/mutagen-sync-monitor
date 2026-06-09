@@ -52,7 +52,17 @@ public class MutagenService
         };
 
         using var process = new Process { StartInfo = psi };
-        process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex)
+        {
+            // Ejecutable no encontrado (ssh/scp/code/mutagen ausente del PATH) u otro fallo de arranque.
+            // Devolvemos fallo en vez de lanzar, para que los callers lo traten sin reventar.
+            _log.Log($"No se pudo arrancar '{executable}': {ex.Message}");
+            return ($"no se pudo ejecutar '{executable}': {ex.Message}", -2);
+        }
 
         var outputTask = process.StandardOutput.ReadToEndAsync(ct);
         var errorTask  = process.StandardError.ReadToEndAsync(ct);

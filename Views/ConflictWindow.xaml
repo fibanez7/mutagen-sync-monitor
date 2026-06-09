@@ -79,7 +79,7 @@
         </Grid>
 
         <!-- Row 3: per-conflict actions -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal"
+        <StackPanel x:Name="ActionsPanel" Grid.Row="3" Orientation="Horizontal"
                     HorizontalAlignment="Center" Margin="0,10,0,4">
             <Button x:Name="UseLocalBtn"  Content="✔ Usar Local"  Background="#E3F2FD"
                     Click="UseLocal_Click"/>
@@ -98,7 +98,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <StackPanel x:Name="GlobalPanel" Grid.Column="0" Orientation="Horizontal">
                     <Button Content="Todos: Local"  Background="#BBDEFB" Click="AllLocal_Click"/>
                     <Button Content="Todos: Remoto" Background="#E1BEE7" Click="AllRemote_Click"/>
                     <Button Content="↺ Reset Sync"  Background="#FFF9C4" Click="Reset_Click"/>
