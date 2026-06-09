@@ -231,6 +231,8 @@ Buscado en el **mismo directorio que el .exe** (`ConfigService` usa `Path.GetDir
 
 El CLI se **bundlea** junto al programa (`mutagen.exe` en la carpeta de instalación). Decisión deliberada: versión fija conocida-buena, offline, sin que el usuario instale nada ni dependa del PATH global.
 
+> **Agent bundle obligatorio (fix posterior a v3.1.2):** el zip de mutagen trae DOS ficheros: `mutagen.exe` **y `mutagen-agents.tar.gz`** (~97MB). El tarball es el agente POSIX que mutagen sube por SSH al server (a `~/.mutagen/agents/<versión>/` del user remoto, automático). DEBE estar **junto a `mutagen.exe`** y casar en versión. Sin él, crear sync en máquina nueva falla con `unable to locate agent bundle (search paths: [...])`. Se bundlea en los 3 sitios: `build.ps1` (extrae ambos a `dist\`), `installer.iss` (instala ambos), `MutagenUpdater` (self-update reemplaza ambos). Si una máquina ya tiene el agente desplegado en el server, las syncs funcionan aunque le falte el tarball local → por eso el bug solo aparece en máquina/usuario-SSH nuevo.
+
 - **Resolución de ruta** (`MutagenService`): prefiere `mutagen.exe` junto al exe (`AppDirectory`); si no existe, cae a `"mutagen"` en PATH (modo dev/portable). `MutagenAsync` siempre usa `MutagenPath`.
 - **Actualización a demanda** (`MutagenUpdater`): menú tray → Ajustes → "Actualizar Mutagen CLI…". Consulta la última release de `mutagen-io/mutagen`, descarga windows/amd64, **para el daemon**, reemplaza el exe (backup `.old` para rollback), reinicia daemon. Solo si `CanSelfUpdate` (mutagen es la copia bundleada; si viene del PATH, avisa de usar winget).
 - Por defecto NO auto-actualiza — estable salvo que el usuario lo pida.
@@ -247,9 +249,18 @@ Decidido: **instalador `setup.exe`** (Inno Setup). Solo el que compila necesita 
 - `AppId` GUID estable → reinstalar **actualiza en sitio**, no duplica. `CloseApplications=yes` cierra la app antes de actualizar para no bloquear ficheros.
 - `config.json` lo crea el exe junto a sí mismo en el primer arranque (`ConfigService.EnsureExists`) y abre Ajustes. La carpeta es escribible, así que funciona instalado.
 
-### Pasos del Release
-1. `.\build.ps1 -Installer` → genera `dist\MutagenManager.exe`, bundlea `mutagen.exe` y compila `dist\MutagenManager-Setup-3.1.0.exe`.
-2. Subir el `setup.exe` a GitHub Releases. Instrucción al usuario: ejecutar, configurar servidores en Ajustes. Nada más.
+### Pasos del Release (automatizado vía GitHub Actions)
+
+**El git tag es la única fuente de verdad de la versión.** Ya NO se edita la versión en `csproj`/`installer.iss` a mano (los valores ahí son solo fallback para builds locales). El workflow inyecta la versión del tag:
+- `build.ps1 -Version 3.1.3` → `dotnet publish -p:Version=...` + `ISCC /DAppVersion=...`.
+- `installer.iss` usa `#ifndef AppVersion` → respeta el `/D` del CI; sin él cae al default.
+
+Flujo:
+1. Commit + push de los cambios a `main`.
+2. `git tag v3.1.3 && git push origin v3.1.3`.
+3. `.github/workflows/release.yml` (runner windows-latest): instala .NET 8 + Inno Setup (choco), corre `build.ps1 -Installer -Version <tag>`, y `softprops/action-gh-release` publica la Release con **notas automáticas desde los commits** (`generate_release_notes`) y el `setup.exe` adjunto.
+
+**Build local manual** (debug/sin CI): `.\build.ps1 -Installer` usa la versión de los ficheros. Subir el `setup.exe` a GitHub Releases a mano si no se usa el tag.
 
 Detalle y checklist en `.claude/tareas.md`.
 

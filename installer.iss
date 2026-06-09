@@ -12,7 +12,11 @@
 ; ============================================================================
 
 #define AppName        "Mutagen Manager"
-#define AppVersion      "3.1.2"
+; AppVersion la puede sobrescribir el build: ISCC /DAppVersion=3.1.3 (CI desde el git tag).
+; Si no se pasa, cae al valor por defecto de abajo.
+#ifndef AppVersion
+  #define AppVersion    "3.1.2"
+#endif
 #define AppPublisher    "fibanez7"
 #define AppExe          "MutagenManager.exe"
 ; Stable GUID — keeps upgrades in place instead of duplicating installs.
@@ -51,9 +55,12 @@ Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; Group
 ; no aquí, para tener una única fuente de verdad y no duplicar mecanismos.
 
 [Files]
-Source: "dist\{#AppExe}";        DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\mutagen.exe";      DestDir: "{app}"; Flags: ignoreversion
-Source: "config.example.json";   DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\{#AppExe}";              DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\mutagen.exe";            DestDir: "{app}"; Flags: ignoreversion
+; Agent bundle (~97MB): mutagen lo necesita para instalar el agente POSIX en el server.
+; Sin el -> "unable to locate agent bundle" al crear sync en maquina nueva.
+Source: "dist\mutagen-agents.tar.gz";  DestDir: "{app}"; Flags: ignoreversion
+Source: "config.example.json";         DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";              Filename: "{app}\{#AppExe}"

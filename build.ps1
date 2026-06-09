@@ -7,7 +7,8 @@ param(
     [switch]$Run,                  # Ejecuta el .exe tras compilar
     [switch]$Installer,            # Compila el instalador Inno Setup (installer.iss)
     [switch]$SkipMutagen,          # No re-descargar mutagen.exe si ya está en dist\
-    [string]$MutagenVersion = ""   # Tag concreto (ej. v0.18.1). Vacío = última release.
+    [string]$MutagenVersion = "",  # Tag concreto (ej. v0.18.1). Vacío = última release.
+    [string]$Version = ""          # Versión de la app (ej. 3.1.3). Vacío = la de los ficheros. CI la pasa desde el git tag.
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,9 +16,18 @@ $projectDir  = $PSScriptRoot
 $projectFile = Join-Path $projectDir "MutagenManager.csproj"
 $outputDir   = Join-Path $projectDir "dist"
 $mutagenExe  = Join-Path $outputDir "mutagen.exe"
+$mutagenAgents = Join-Path $outputDir "mutagen-agents.tar.gz"
 
 Write-Host ""
 Write-Host "== Compilando MutagenManager v3 ==" -ForegroundColor Cyan
+
+# Versión: la pasada por -Version (CI desde el tag) manda; si no, la de los ficheros.
+$versionArgs = @()
+if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    $v = $Version.TrimStart('v')                     # acepta "v3.1.3" o "3.1.3"
+    Write-Host "  Versión (override): $v" -ForegroundColor White
+    $versionArgs = @("-p:Version=$v", "-p:AssemblyVersion=$v.0", "-p:FileVersion=$v.0")
+}
 
 dotnet publish $projectFile `
     --configuration Release `
@@ -26,6 +36,7 @@ dotnet publish $projectFile `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:EnableCompressionInSingleFile=true `
+    @versionArgs `
     --output $outputDir
 
 if ($LASTEXITCODE -ne 0) {
@@ -34,7 +45,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ── Bundle del CLI de mutagen ───────────────────────────────────────────────
-if (-not ($SkipMutagen -and (Test-Path $mutagenExe))) {
+if (-not ($SkipMutagen -and (Test-Path $mutagenExe) -and (Test-Path $mutagenAgents))) {
     Write-Host ""
     Write-Host "== Descargando mutagen CLI ==" -ForegroundColor Cyan
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -65,6 +76,13 @@ if (-not ($SkipMutagen -and (Test-Path $mutagenExe))) {
     if (-not $found) { Write-Host "ERROR: el zip no contenia mutagen.exe." -ForegroundColor Red; exit 1 }
     Copy-Item $found.FullName $mutagenExe -Force
     Write-Host "  mutagen.exe bundleado en dist\ (pinned: $($rel.tag_name))" -ForegroundColor Green
+
+    # Agent bundle: lo necesita mutagen para instalar el agente POSIX en el server.
+    # Sin el (search paths junto a mutagen.exe) -> "unable to locate agent bundle" al crear sync.
+    $agents = Get-ChildItem -Path $extract -Filter "mutagen-agents.tar.gz" -Recurse | Select-Object -First 1
+    if (-not $agents) { Write-Host "ERROR: el zip no contenia mutagen-agents.tar.gz." -ForegroundColor Red; exit 1 }
+    Copy-Item $agents.FullName $mutagenAgents -Force
+    Write-Host "  mutagen-agents.tar.gz bundleado en dist\" -ForegroundColor Green
 }
 
 $exePath = Join-Path $outputDir "MutagenManager.exe"
@@ -90,7 +108,9 @@ if ($Installer) {
         Write-Host "ERROR: ISCC.exe no encontrado. Instala Inno Setup 6: https://jrsoftware.org/isdl.php" -ForegroundColor Red
         exit 1
     }
-    & $iscc (Join-Path $projectDir "installer.iss")
+    $isccArgs = @()
+    if (-not [string]::IsNullOrWhiteSpace($Version)) { $isccArgs += "/DAppVersion=$($Version.TrimStart('v'))" }
+    & $iscc @isccArgs (Join-Path $projectDir "installer.iss")
     if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: compilacion del instalador fallo." -ForegroundColor Red; exit 1 }
     Write-Host "  Instalador generado en dist\MutagenManager-Setup-*.exe" -ForegroundColor Green
 }

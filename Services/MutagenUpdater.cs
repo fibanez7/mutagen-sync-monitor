@@ -114,6 +114,15 @@ public sealed class MutagenUpdater
                 return false;
             }
 
+            // El agent bundle DEBE coincidir en versión con mutagen.exe; si no, mutagen
+            // no puede instalar el agente POSIX en el server ("unable to locate agent bundle").
+            var newAgents = Directory.GetFiles(extractDir, "mutagen-agents.tar.gz", SearchOption.AllDirectories).FirstOrDefault();
+            if (newAgents == null)
+            {
+                progress?.Report("El paquete no contenía mutagen-agents.tar.gz.");
+                return false;
+            }
+
             // The daemon holds mutagen.exe open — stop it before replacing the file
             progress?.Report("Deteniendo daemon de mutagen…");
             try { await _mutagen.MutagenAsync("daemon stop", 10_000); } catch { }
@@ -126,6 +135,10 @@ public sealed class MutagenUpdater
             if (File.Exists(target)) File.Move(target, backup);   // keep a rollback copy
             File.Copy(newExe, target, overwrite: true);
             if (File.Exists(backup)) { try { File.Delete(backup); } catch { } }
+
+            // Reemplaza el agent bundle junto al exe (misma carpeta) para que casen versiones.
+            var agentsTarget = Path.Combine(Path.GetDirectoryName(target)!, "mutagen-agents.tar.gz");
+            File.Copy(newAgents, agentsTarget, overwrite: true);
 
             // Restart daemon so syncs resume
             try { await _mutagen.MutagenAsync("daemon start", 10_000); } catch { }
