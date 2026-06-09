@@ -32,10 +32,32 @@ jobs:
           $version = "${{ github.ref_name }}"   # ej. v3.1.3
           .\build.ps1 -Installer -Version $version
 
+      - name: Extraer notas del CHANGELOG
+        id: notes
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')   # 3.1.3
+          $body = ""
+          if (Test-Path CHANGELOG.md) {
+            $lines = Get-Content CHANGELOG.md
+            # Sección entre "## [<ver>]" y la siguiente cabecera "## ".
+            $start = ($lines | Select-String -Pattern "^##\s*\[$([regex]::Escape($ver))\]").LineNumber
+            if ($start) {
+              $rest = $lines[$start..($lines.Count - 1)]
+              $next = ($rest | Select-String -Pattern '^##\s').LineNumber | Select-Object -First 1
+              $section = if ($next) { $rest[0..($next - 2)] } else { $rest }
+              $body = ($section -join "`n").Trim()
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($body)) {
+            $body = "Release $ver. Ver CHANGELOG.md para detalles."
+          }
+          Set-Content -Path RELEASE_NOTES.md -Value $body -Encoding utf8
+          Write-Host "── Notas de la release ──`n$body"
+
       - name: Publicar Release con el setup.exe
         uses: softprops/action-gh-release@v2
         with:
-          # Notas de versión automáticas a partir de los commits desde el tag anterior.
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           files: dist/MutagenManager-Setup-*.exe
           fail_on_unmatched_files: true
